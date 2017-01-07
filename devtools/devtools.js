@@ -207,6 +207,55 @@ function wrapFunctionalComponent(vnode) {
 }
 
 /**
+ * UpdateQueue orders and dispatches component update notifications
+ * to the React DevTools.
+ */
+class UpdateQueue {
+	constructor(reconciler) {
+		this.reconciler = reconciler;
+		this._updateQueue = [];
+		this._updateTimer;
+	}
+
+	/**
+	 * Schedule an async report of a change to a component (mount, update or
+	 * unmount) to the devtools.
+	 */
+	schedule(update) {
+		if (!this._updateTimer) {
+			this._updateTimer = setTimeout(this.flush.bind(this), 10);
+		}
+		this._updateQueue.push(update);
+	}
+
+	/** Send all pending updates to the DevTools. */
+	flush() {
+		// Sort updates so that child components are mounted before they are
+		// referenced via an update to any parent component.
+		const updateOrder = ['mount', 'update', 'remove'];
+		this._updateQueue.sort((updateA, updateB) => {
+			return updateOrder.indexOf(updateA.type) - updateOrder.indexOf(updateB.type);
+		});
+
+		this._updateQueue.forEach(update => {
+			switch (update.type) {
+			case 'mount':
+				this.reconciler.mountComponent(update.instance);
+				break;
+			case 'update':
+				this.reconciler.receiveComponent(update.instance);
+				break;
+			case 'remove':
+				this.reconciler.unmountComponent(update.instance);
+				break;
+			}
+		});
+		this._updateQueue = [];
+		this._updateTimer = null;
+	}
+}
+
+/**
  * Create a bridge for exposing preact's component tree to React DevTools.
  *
  * It creates implementations of the interfaces that ReactDOM passes to
@@ -265,6 +314,8 @@ function createDevToolsBridge() {
 		unmountComponent(/* instance, ... */) { }
 	};
 
+	const updateQueue = new UpdateQueue(Reconciler);
+
 	/** Notify devtools that a new component instance has been mounted into the DOM. */
 	const componentAdded = component => {
 		const instance = updateReactComponent(component);
@@ -275,9 +326,9 @@ function createDevToolsBridge() {
 		}
 		visitNonCompositeChildren(instance, childInst => {
 			childInst._inDevTools = true;
-			Reconciler.mountComponent(childInst);
+			updateQueue.schedule({type: 'mount', instance: childInst});
 		});
-		Reconciler.mountComponent(instance);
+		updateQueue.schedule({type: 'mount', instance: instance});
 	};
 
 	/** Notify devtools that a component has been updated with new props/state. */
@@ -290,14 +341,15 @@ function createDevToolsBridge() {
 		// Notify devtools about updates to this component and any non-composite
 		// children
 		const instance = updateReactComponent(component);
-		Reconciler.receiveComponent(instance);
+		updateQueue.schedule({type: 'update', instance: instance});
 		visitNonCompositeChildren(instance, childInst => {
 			if (!childInst._inDevTools) {
 				// New DOM child component
 				childInst._inDevTools = true;
-				Reconciler.mountComponent(childInst);
+				updateQueue.schedule({type: 'mount', instance: childInst});
 			} else {
 				// Updated DOM child component
+				updateQueue.schedule({type: 'update', instance: childInst});
 				Reconciler.receiveComponent(childInst);
 			}
 		});
@@ -308,7 +360,7 @@ function createDevToolsBridge() {
 		prevRenderedChildren.forEach(childInst => {
 			if (!document.body.contains(childInst.node)) {
 				instanceMap.delete(childInst.node);
-				Reconciler.unmountComponent(childInst);
+				updateQueue.schedule({type: 'unmount', instance: childInst});
 			}
 		});
 	};
@@ -318,9 +370,10 @@ function createDevToolsBridge() {
 		const instance = updateReactComponent(component);
 		visitNonCompositeChildren(childInst => {
 			instanceMap.delete(childInst.node);
+			updateQueue.schedule({type: 'unmount', instance: childInst});
 			Reconciler.unmountComponent(childInst);
 		});
-		Reconciler.unmountComponent(instance);
+		updateQueue.schedule({type: 'unmount', instance: instance});
 		instanceMap.delete(component);
 		if (instance._rootID) {
 			delete roots[instance._rootID];

@@ -107,6 +107,9 @@ describe_('React Developer Tools integration', () => {
 		expect(renderer.Reconciler.unmountComponent).to.be.called;
 	});
 
+	// TODO - Test that dev tools are notified about new child components being
+	// mounted before they are referenced by an update to the parent.
+
 	// Test properties of DOM components exposed to devtools via
 	// ReactDOMComponent-like instances
 	it('exposes the tag name of DOM components', () => {
