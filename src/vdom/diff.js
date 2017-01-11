@@ -9,8 +9,11 @@ import { unmountComponent } from './component';
 import options from '../options';
 
 
-/** Queue of components that have been mounted and are awaiting componentDidMount */
-export const mounts = [];
+/**
+ * Queue of components that have been mounted or updated and are
+ * awaiting componentDidMount/componentDidUpdate
+ */
+export const updates = [];
 
 /** Diff recursion count, used to track the end of the diff cycle. */
 export let diffLevel = 0;
@@ -21,12 +24,21 @@ let isSvgMode = false;
 /** Global flag indicating if the diff is performing hydration */
 let hydrating = false;
 
-/** Invoke queued componentDidMount lifecycle methods */
-export function flushMounts() {
-	let c;
-	while ((c=mounts.pop())) {
-		if (options.afterMount) options.afterMount(c);
-		if (c.componentDidMount) c.componentDidMount();
+/** Invoke queued lifecycle methods */
+export function flushUpdates() {
+	let update;
+	while ((update=updates.pop())) {
+		let { component, prevProps, prevState, prevContext } = update;
+		if (prevProps) {
+			if (component.componentDidUpdate) {
+				component.componentDidUpdate(prevProps, prevState, prevContext);
+			}
+			if (options.afterUpdate) options.afterUpdate(component);
+
+		} else {
+			if (component.componentDidMount) component.componentDidMount();
+			if (options.afterMount) options.afterMount(component);
+		}
 	}
 }
 
@@ -55,8 +67,8 @@ export function diff(dom, vnode, context, mountAll, parent, componentRoot) {
 	// diffLevel being reduced to 0 means we're exiting the diff
 	if (!--diffLevel) {
 		hydrating = false;
-		// invoke queued componentDidMount lifecycle methods
-		if (!componentRoot) flushMounts();
+		// invoke queued lifecycle methods
+		if (!componentRoot) flushUpdates();
 	}
 
 	return ret;

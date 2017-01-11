@@ -3,7 +3,7 @@ import options from '../options';
 import { isFunction, clone, extend } from '../util';
 import { enqueueRender } from '../render-queue';
 import { getNodeProps } from './index';
-import { diff, mounts, diffLevel, flushMounts, recollectNodeTree } from './diff';
+import { diff, updates, diffLevel, flushUpdates, recollectNodeTree } from './diff';
 import { isFunctionalComponent, buildFunctionalComponent } from './functional-component';
 import { createComponent, collectComponent } from './component-recycler';
 import { removeNode } from '../dom/index';
@@ -67,9 +67,9 @@ export function renderComponent(component, opts, mountAll, isChild) {
 		props = component.props,
 		state = component.state,
 		context = component.context,
-		previousProps = component.prevProps || props,
-		previousState = component.prevState || state,
-		previousContext = component.prevContext || context,
+		prevProps = component.prevProps || props,
+		prevState = component.prevState || state,
+		prevContext = component.prevContext || context,
 		isUpdate = component.base,
 		nextBase = component.nextBase,
 		initialBase = isUpdate || nextBase,
@@ -78,9 +78,9 @@ export function renderComponent(component, opts, mountAll, isChild) {
 
 	// if updating
 	if (isUpdate) {
-		component.props = previousProps;
-		component.state = previousState;
-		component.context = previousContext;
+		component.props = prevProps;
+		component.state = prevState;
+		component.context = prevContext;
 		if (opts!==FORCE_RENDER
 			&& component.shouldComponentUpdate
 			&& component.shouldComponentUpdate(props, state, context) === false) {
@@ -178,19 +178,16 @@ export function renderComponent(component, opts, mountAll, isChild) {
 	}
 
 	if (!isUpdate || mountAll) {
-		mounts.unshift(component);
+		updates.unshift({component});
 	}
 	else if (!skip) {
-		if (component.componentDidUpdate) {
-			component.componentDidUpdate(previousProps, previousState, previousContext);
-		}
-		if (options.afterUpdate) options.afterUpdate(component);
+		updates.unshift({component, prevProps, prevState, prevContext});
 	}
 
 	let cb = component._renderCallbacks, fn;
 	if (cb) while ( (fn = cb.pop()) ) fn.call(component);
 
-	if (!diffLevel && !isChild) flushMounts();
+	if (!diffLevel && !isChild) flushUpdates();
 }
 
 

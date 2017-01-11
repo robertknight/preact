@@ -91,6 +91,31 @@ describe('Lifecycle methods', () => {
 			rerender();
 			expect(ReceivePropsComponent.prototype.componentWillUpdate).to.have.been.called;
 		});
+
+		it('should be called after children are mounted', () => {
+			let log = [];
+
+			class Inner extends Component {
+				componentDidMount() {
+					log.push('Inner mounted');
+				}
+			}
+
+			class Outer extends Component {
+				componentDidUpdate() {
+					log.push('Outer updated');
+				}
+
+				render(props) {
+					return props.renderInner ? <Inner /> : <div />;
+				}
+			}
+
+			const elem = render(<Outer renderInner={false} />, scratch);
+			render(<Outer renderInner={true} />, scratch, elem);
+
+			expect(log).to.deep.equal(['Inner mounted', 'Outer updated']);
+		});
 	});
 
 	describe('#componentWillReceiveProps', () => {
