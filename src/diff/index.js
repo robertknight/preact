@@ -175,7 +175,17 @@ export function diff(parentDom, newVNode, oldVNode, context, isSvg, excessDomChi
 			}
 		}
 		else {
-			newVNode._dom = diffElementNodes(oldVNode._dom, newVNode, oldVNode, context, isSvg, excessDomChildren, mounts, ancestorComponent);
+			newVNode._dom = diffElementNodes(
+				parentDom.ownerDocument,
+				oldVNode._dom,
+				newVNode,
+				oldVNode,
+				context,
+				isSvg,
+				excessDomChildren,
+				mounts,
+				ancestorComponent,
+			);
 
 			if ((tmp = newVNode.ref) && (oldVNode.ref !== tmp)) {
 				applyRef(tmp, newVNode._dom, ancestorComponent);
@@ -211,6 +221,7 @@ export function commitRoot(mounts, root) {
 
 /**
  * Diff two virtual nodes representing DOM element
+ * @param {Document} doc - The document to create any new nodes in
  * @param {import('../internal').PreactElement} dom The DOM element representing
  * the virtual nodes being diffed
  * @param {import('../internal').VNode} newVNode The new virtual node
@@ -224,7 +235,7 @@ export function commitRoot(mounts, root) {
  * component to the ones being diffed
  * @returns {import('../internal').PreactElement}
  */
-function diffElementNodes(dom, newVNode, oldVNode, context, isSvg, excessDomChildren, mounts, ancestorComponent) {
+function diffElementNodes(doc, dom, newVNode, oldVNode, context, isSvg, excessDomChildren, mounts, ancestorComponent) {
 	let i;
 	let oldProps = oldVNode.props;
 	let newProps = newVNode.props;
@@ -245,9 +256,9 @@ function diffElementNodes(dom, newVNode, oldVNode, context, isSvg, excessDomChil
 
 	if (dom==null) {
 		if (newVNode.type===null) {
-			return document.createTextNode(newProps);
+			return doc.createTextNode(newProps);
 		}
-		dom = isSvg ? document.createElementNS('http://www.w3.org/2000/svg', newVNode.type) : document.createElement(newVNode.type);
+		dom = isSvg ? doc.createElementNS('http://www.w3.org/2000/svg', newVNode.type) : doc.createElement(newVNode.type);
 		// we created a new parent, so none of the previously attached children can be reused:
 		excessDomChildren = null;
 	}
